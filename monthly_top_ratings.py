@@ -9,15 +9,22 @@ import sqlite3
 import calendar
 from datetime import datetime
 
-def get_monthly_ratings():
+def get_monthly_top_ratings(db_path='data/triathlon.db'):
     """
     Query the database to find the top 10 athletes by rating for each month.
     Uses a SQL-based approach to find the most recent rating as of the end of each month.
     Returns a dictionary with keys in the format 'YYYY-MM' and values as lists of tuples
     containing athlete information and ratings.
+    
+    Args:
+        db_path (str): Path to the SQLite database file
+        
+    Returns:
+        dict: A dictionary where each key is 'YYYY-MM' and each value is a list of tuples:
+              (athlete_id, full_name, event_date, new_elo, event_name)
     """
     # Connect to the database
-    conn = sqlite3.connect('data/triathlon.db')
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     # Phase 1: Generate a list of all months
@@ -51,7 +58,8 @@ def get_monthly_ratings():
                    a.full_name,
                    e2.event_date,
                    e2.new_elo,
-                   e2.event_name
+                   e2.event_name,
+                   a.profile_image_url
             FROM elo_history e2
             JOIN last_competition lc
                 ON lc.athlete_id = e2.athlete_id
@@ -82,11 +90,17 @@ def print_monthly_ratings(monthly_ratings):
         print(f"{'Rank':<5}{'Athlete ID':<12}{'Name':<30}{'Rating':<10}{'Last Race':<50}{'Date':<12}")
         print("-" * 110)
         
-        for rank, (athlete_id, name, date, rating, event) in enumerate(monthly_ratings[month_key], 1):
+        for rank, athlete_data in enumerate(monthly_ratings[month_key], 1):
+            athlete_id, name, date, rating, event, profile_image = athlete_data
             print(f"{rank:<5}{athlete_id:<12}{name:<30}{rating:<10.2f}{event:<50}{date:<12}")
 
 if __name__ == "__main__":
-    print("Fetching top ratings for each month from the triathlon database...")
-    monthly_ratings = get_monthly_ratings()
+    import os
+    
+    # Get database path from environment variable or use default
+    db_path = os.environ.get('TRIATHLON_DB_PATH', 'data/triathlon.db')
+    
+    print(f"Fetching top ratings for each month from the triathlon database at {db_path}...")
+    monthly_ratings = get_monthly_top_ratings(db_path)
     print_monthly_ratings(monthly_ratings)
     print("\nAnalysis complete.")
