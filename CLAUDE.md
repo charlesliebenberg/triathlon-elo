@@ -11,7 +11,8 @@ This project is designed to collect triathlon event data and athlete performance
 5. [Code Style Guidelines](#code-style-guidelines)  
 6. [Database Schema Overview](#database-schema-overview)  
 7. [Querying triathlon.db](#querying-triathlondb)  
-8. [Final Notes](#final-notes)  
+8. [Common Analysis Patterns](#common-analysis-patterns)  
+9. [Final Notes](#final-notes)  
 
 ## Project Overview
 
@@ -344,6 +345,81 @@ sqlite> .tables
 sqlite> SELECT * FROM athletes LIMIT 5;
 sqlite> .exit
 ```
+
+## Common Analysis Patterns
+
+### Monthly Top Ratings Analysis
+
+A common analytical need is to identify the top-rated athletes for each month in the database. This is particularly useful for tracking performance trends over time. The key challenge is identifying the correct "as-of" rating for each athlete at the end of each month.
+
+Here's a SQL-based approach to find the top 10 athletes by rating for each month:
+
+```python
+import sqlite3
+import calendar
+from datetime import datetime
+
+def get_monthly_top_ratings():
+    conn = sqlite3.connect('data/triathlon.db')
+    cursor = conn.cursor()
+    
+    # 1. Get all distinct year-month combinations
+    cursor.execute("""
+        SELECT DISTINCT strftime('%Y-%m', event_date) AS year_month
+        FROM elo_history
+        ORDER BY year_month
+    """)
+    months = [row[0] for row in cursor.fetchall()]
+    
+    results_by_month = {}
+    
+    # 2. For each month, find the most recent rating for each athlete
+    for year_month in months:
+        year, month = year_month.split('-')
+        year, month = int(year), int(month)
+        
+        # Calculate the last day of the month
+        last_day = calendar.monthrange(year, month)[1]
+        last_day_of_month = f"{year}-{month:02d}-{last_day}"
+        
+        # Use a correlated subquery to get each athlete's most recent rating
+        # up to the last day of the month
+        cursor.execute("""
+            WITH last_competition AS (
+                SELECT e1.athlete_id,
+                       MAX(e1.event_date) AS max_date
+                FROM elo_history e1
+                WHERE e1.event_date <= ?
+                GROUP BY e1.athlete_id
+            )
+            SELECT e2.athlete_id,
+                   a.full_name,
+                   e2.event_date,
+                   e2.new_elo,
+                   e2.event_name
+            FROM elo_history e2
+            JOIN last_competition lc
+                ON lc.athlete_id = e2.athlete_id
+               AND lc.max_date = e2.event_date
+            JOIN athletes a
+                ON a.athlete_id = e2.athlete_id
+            ORDER BY e2.new_elo DESC
+            LIMIT 10
+        """, (last_day_of_month,))
+        
+        results_by_month[year_month] = cursor.fetchall()
+    
+    conn.close()
+    return results_by_month
+```
+
+This approach:
+1. Identifies all distinct months in the dataset
+2. For each month, calculates the last day of that month
+3. Uses a correlated subquery to find each athlete's most recent rating as of that date
+4. Orders by rating and returns the top 10 athletes
+
+You can then filter for specific months (e.g., December of each year) or create visualizations showing rating trends over time.
 
 ## Final Notes
 
