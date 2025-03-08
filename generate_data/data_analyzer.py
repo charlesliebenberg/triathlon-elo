@@ -272,7 +272,7 @@ def analyze_data(results_file="results_data.json", athletes_file="athletes_data.
     Params:
         results_file (str): File with results data
         athletes_file (str): File with athletes data
-        output_file (str): File to save analyzed data to
+        output_file (str or None): File to save analyzed data to (None if database only)
         limit_athletes (int): Optional limit on number of athletes to process
         db_upload (bool): Whether to upload data directly to database
         db_file (str): Database file path to use if db_upload is True
@@ -288,15 +288,21 @@ def analyze_data(results_file="results_data.json", athletes_file="athletes_data.
     if not os.path.isabs(athletes_file) and not os.path.dirname(athletes_file):
         athletes_file = os.path.join(DATA_DIR, athletes_file)
     
-    if not os.path.isabs(output_file) and not os.path.dirname(output_file):
-        output_file = os.path.join(DATA_DIR, output_file)
+    # Handle output_file being None (database-only mode)
+    if output_file is not None:
+        if not os.path.isabs(output_file) and not os.path.dirname(output_file):
+            output_file = os.path.join(DATA_DIR, output_file)
     
     if not os.path.isabs(db_file):
-        db_file = os.path.join(ROOT_DIR, db_file)
+        db_file = os.path.join(DATA_DIR, db_file)
         
     print(f"\n🔬 ELITE MEN'S DATA ANALYZER 🔬")
     print(f"Loading results from {results_file}")
     print(f"Loading athletes from {athletes_file}")
+    if output_file:
+        print(f"Will save analyzed data to {output_file}")
+    else:
+        print(f"Database-only mode (no JSON output file)")
     
     # Load input data
     results_data = load_data_from_json(results_file)
@@ -411,10 +417,12 @@ def analyze_data(results_file="results_data.json", athletes_file="athletes_data.
                 print(f"  Final Rating: {timeline['final_elo']:.1f}")
                 print(f"  Total Change: {timeline['final_elo'] - timeline['initial_elo']:.1f}")
     
-    # Save to file if output_file is specified
-    if output_file and not db_upload:
+    # Save analyzed data
+    if output_file:
         save_data_to_json(data, output_file)
-        print(f"Data saved to {output_file}")
+        print(f"✅ Analysis complete. Data saved to {output_file}")
+    else:
+        print(f"✅ Analysis complete. (No JSON output file)")
     
     # Upload to database if db_upload is enabled
     if db_upload:
